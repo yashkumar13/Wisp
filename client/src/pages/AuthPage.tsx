@@ -9,19 +9,13 @@ interface FormData {
 type AuthPageProps = {
   mode: 'signup' | 'login'
   onModeChange: (mode: 'signup' | 'login') => void
-  onAuthenticate: (user: FormData) => void
+  onAuthenticate: (user: { username: string; email: string; token: string }) => void
 }
 
 export function AuthPage({ mode, onModeChange, onAuthenticate }: AuthPageProps) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-
-  const defaultFormData: FormData = {
-    username: '',
-    email: '',
-    password: '',
-  }
 
   const heading = useMemo(
     () => (mode === 'signup' ? 'Create your account' : 'Welcome back'),
@@ -36,23 +30,40 @@ export function AuthPage({ mode, onModeChange, onAuthenticate }: AuthPageProps) 
     [mode],
   )
 
-  const handleSubmit = async ( event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+
     const data: FormData = {
       username: username.trim(),
       email: email.trim(),
       password,
     }
-    console.log('Form submitted with data:', data)
 
-    event.preventDefault()
-    const res: any = await axios.post('http://localhost:3000/api/user', data);
-    console.log('Response from server:', res.data);
+    try {
+      if (mode === 'signup') {
+        await axios.post('http://localhost:3000/api/user', data)
+      }
 
-    // onAuthenticate({
-    //   username: username.trim() || email.split('@')[0] || 'guest',
-    //   email: email.trim(),
-    //   password,
-    // })
+      const res: any = await axios.post('http://localhost:3000/api/auth/login', {
+        email: data.email,
+        password: data.password,
+      })
+
+      const token = res.data.accessToken
+      if (token) {
+        document.cookie = `accessToken=${token}; path=/; max-age=3600`
+        axios.defaults.headers.common.Authorization = `Bearer ${token}`
+      }
+
+      const returnedUser = res.data.user || {}
+      onAuthenticate({
+        username: returnedUser.username || email.split('@')[0] || 'Guest',
+        email: returnedUser.email || email,
+        token: token || '',
+      })
+    } catch (error: any) {
+      console.error('Auth request failed', error)
+    }
   }
 
   return (
@@ -98,12 +109,12 @@ export function AuthPage({ mode, onModeChange, onAuthenticate }: AuthPageProps) 
             </label>
           )}
 
-          <label>
-            <span>{mode === 'signup' ? 'Email' : 'Email or Username'}</span>
+              <label>
+            <span>Email</span>
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder={mode === 'signup' ? 'you@example.com' : 'name@example.com or username'}
+              placeholder="you@example.com"
               required
             />
           </label>
